@@ -18,13 +18,13 @@ jobs:
           go-version: "1.22.2"
 
       - name: Build
-        run: go build -v -o build/gitea-update ./...
+        run: go build -v -o .build ./...
 
       - name: List build output
-        run: ls -lah build/
+        run: ls -lah .build/
 
       - name: Archive Production Artifacts
         uses: actions/upload-artifact@v2
         with:
           name: gitea-update
-          path: build/gitea-update
+          path: .build
