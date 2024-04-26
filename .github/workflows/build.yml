@@ -10,21 +10,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v5
         with:
           go-version: "1.22.2"
 
       - name: Build
-        run: go build -v -o build/gitea-update ./...
+        run: go build -v -o .build ./...
 
       - name: List build output
-        run: ls -lah build/
+        run: ls -lah .build/
 
-      - name: Archive Production Artifacts
-        uses: actions/upload-artifact@v2
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
         with:
-          name: gitea-update
-          path: build/gitea-update
+          files: .build/gitea-udpate
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
