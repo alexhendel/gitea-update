@@ -1,0 +1,16 @@
+settings:
+  user: "app"
+  group: "app"
+  services:
+    gitea:
+      bin: "gitea"
+      path: "/opt/gitea"
+      urls:
+        download: "https://dl.gitea.io/{bin}/{version}/{bin}-{version}-linux-amd64"
+        api: "https://api.github.com/repos/go-gitea/gitea/tags"
+    act-runner:
+      bin: "act_runner"
+      path: "/opt/gitea"
+      urls:
+        download: "https://dl.gitea.com/{bin}/{version}/{bin}-{version}-linux-amd64"
+        api: "https://gitea.com/api/v1/repos/gitea/act_runner/tags"
