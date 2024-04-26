@@ -1,0 +1,27 @@
+name: Build on Release
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: "1.22.2"
+
+      - name: Build
+        run: |
+          go build -v ./...
+
+      - name: Archive Production Artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: gitea-update
+          path: gitea-update
