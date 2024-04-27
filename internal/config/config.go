@@ -47,6 +47,13 @@ func UpdateServiceVersion(name, version string) {
 	}
 }
 
+func UpdateServicePath(name, path string) {
+	if service, exists := AppConfig.Settings.Services[name]; exists {
+		service.Path = path
+		AppConfig.Settings.Services[name] = service
+	}
+}
+
 func LoadConfig(paths []string) error {
 	for _, path := range paths {
 		if _, err := os.Stat(path); err == nil {
@@ -74,8 +81,9 @@ func GetDefaultConfig() *Config {
 			Group: "app",
 			Services: map[string]Service{
 				"gitea": {
-					BinName: "gitea",
-					Path:    "/opt/gitea",
+					BinName:     "gitea",
+					SystemdName: "gitea",
+					Path:        "/opt/gitea",
 					URLs: ServiceURLs{
 						Download: "https://dl.gitea.io/gitea/{version}/gitea-{version}-linux-amd64",
 						API:      "https://api.github.com/repos/go-gitea/gitea/tags",
@@ -87,8 +95,9 @@ func GetDefaultConfig() *Config {
 					},
 				},
 				"act_runner": {
-					BinName: "act_runner",
-					Path:    "/opt/gitea",
+					BinName:     "act_runner",
+					SystemdName: "act-runner",
+					Path:        "/opt/gitea",
 					URLs: ServiceURLs{
 						Download: "https://dl.gitea.com/act_runner/{version}/act_runner-{version}-linux-amd64",
 						API:      "https://gitea.com/api/v1/repos/gitea/act_runner/tags",
