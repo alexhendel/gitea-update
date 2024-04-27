@@ -1,6 +1,7 @@
 package install
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,15 +18,14 @@ import (
 	"alex-hendel.de/gitea-update/internal/version"
 )
 
-func DownloadBinary(version, binName, path, owner, group string) error {
-	service, exists := config.GetService(binName)
-	if !exists {
-		return fmt.Errorf("service configuration not found for binary: %s", binName)
-	}
-
+func DownloadBinary(version, path, owner, group string, service *config.Service) error {
 	downloadURL := service.URLs.Download
-	downloadURL = strings.Replace(downloadURL, "{bin}", binName, -1)
+	downloadURL = strings.Replace(downloadURL, "{bin}", service.BinName, -1)
 	downloadURL = strings.Replace(downloadURL, "{version}", version, -1)
+
+	logger.LogDebug(fmt.Sprintf("Downloading %s version %s\n", service.BinName, version))
+	logger.LogDebug(fmt.Sprintf("Downloading %s from %s\n", service.BinName, downloadURL))
+	logger.LogDebug(fmt.Sprintf("Downloading to %s\n", path))
 
 	response, err := http.Get(downloadURL)
 	if err != nil {
@@ -33,8 +33,7 @@ func DownloadBinary(version, binName, path, owner, group string) error {
 	}
 	defer response.Body.Close()
 
-	filePath := fmt.Sprintf("%s/%s", path, binName)
-	out, err := os.Create(filePath)
+	out, err := os.Create(path)
 	if err != nil {
 		return err
 	}
@@ -45,16 +44,9 @@ func DownloadBinary(version, binName, path, owner, group string) error {
 		return err
 	}
 
-	err = os.Chmod(filePath, 0755)
+	err = os.Chmod(path, 0755)
 	if err != nil {
 		return fmt.Errorf("failed to set execute permissions: %v", err)
-	}
-
-	if binName == "gitea" {
-		cmd := exec.Command("setcap", "cap_net_bind_service=+ep", filePath)
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("failed to set capabilities: %v", err)
-		}
 	}
 
 	uid, gid, err := getUserGroupIds(owner, group)
@@ -62,10 +54,22 @@ func DownloadBinary(version, binName, path, owner, group string) error {
 		return fmt.Errorf("failed to get user/group IDs: %v", err)
 	}
 
-	err = os.Chown(filePath, uid, gid)
+	err = os.Chown(path, uid, gid)
 	if err != nil {
 		return fmt.Errorf("failed to change file owner: %v", err)
 	}
+
+	var stderr bytes.Buffer
+	var cmd = exec.Command("setcap", "cap_net_bind_service=+ep", path)
+	cmd.Stderr = &stderr
+
+	logger.LogDebug(cmd.String())
+	err = cmd.Run()
+	if err != nil {
+		logger.LogError(fmt.Sprintf("Failed to set capabilities: %v, stderr: %s", err, stderr.String()))
+		return fmt.Errorf("failed to set capabilities: %v, stderr: %s", err, stderr.String())
+	}
+	logger.LogDebug("Set capabilities successfully.")
 
 	return nil
 }
@@ -94,16 +98,11 @@ func getUserGroupIds(owner, group string) (int, int, error) {
 	return uid, gid, nil
 }
 
-func PerformInstallation(path string, dev bool, owner, group string) {
+func PerformInstallation(dev bool) {
 	for _, serviceName := range config.ListServices() {
 		service, exists := config.GetService(serviceName)
 		if !exists {
 			logger.LogError(fmt.Sprintf("Service %s not found in configuration\n", serviceName))
-			os.Exit(1)
-		}
-
-		if err := systemd.StopService(service.BinName); err != nil {
-			logger.LogError(fmt.Sprintf("Stopping service %s failed: %s\n", service.BinName, err))
 			os.Exit(1)
 		}
 
@@ -112,8 +111,18 @@ func PerformInstallation(path string, dev bool, owner, group string) {
 			targetVersion = service.Version.Dev
 		}
 
-		currentBinaryPath := fmt.Sprintf("%s/%s", path, service.BinName)
-		backupBinaryPath := fmt.Sprintf("%s/%s.old", path, service.BinName)
+		if targetVersion == "n/a" || len(targetVersion) == 0 {
+			logger.LogError(fmt.Sprintf("Target version '%s' invalid for %s\n", targetVersion, service.BinName))
+			os.Exit(1)
+		}
+
+		if err := systemd.StopService(service.SystemdName); err != nil {
+			logger.LogError(fmt.Sprintf("Stopping service %s failed: %s\n", service.SystemdName, err))
+			os.Exit(1)
+		}
+
+		currentBinaryPath := fmt.Sprintf("%s/%s", service.Path, service.BinName)
+		backupBinaryPath := fmt.Sprintf("%s/%s.old", service.Path, service.BinName)
 
 		if _, err := os.Stat(currentBinaryPath); err == nil {
 			if err := os.Rename(currentBinaryPath, backupBinaryPath); err != nil {
@@ -125,19 +134,19 @@ func PerformInstallation(path string, dev bool, owner, group string) {
 			continue
 		}
 
-		if err := DownloadBinary(targetVersion, service.BinName, currentBinaryPath, owner, group); err != nil {
+		if err := DownloadBinary(targetVersion, currentBinaryPath, config.AppConfig.Settings.User, config.AppConfig.Settings.Group, &service); err != nil {
 			logger.LogError(fmt.Sprintf("Failed to install new version of %s: %s\n", service.BinName, err))
 			// Attempt to restore from backup if installation fails
 			os.Rename(backupBinaryPath, currentBinaryPath)
 			continue
 		}
 
-		if err := systemd.StartService(service.BinName); err != nil {
-			logger.LogError(fmt.Sprintf("Starting service %s failed: %s\n", service.BinName, err))
+		if err := systemd.StartService(service.SystemdName); err != nil {
+			logger.LogError(fmt.Sprintf("Starting service %s failed: %s\n", service.SystemdName, err))
 			os.Exit(1)
 		}
 
-		logger.LogInfo(fmt.Sprintf("Successfully installed %s version %s\n", service.BinName, targetVersion))
+		logger.LogInfo(fmt.Sprintf("Successfully installed %s version %s\n", service.SystemdName, targetVersion))
 	}
 }
 
@@ -151,8 +160,6 @@ func RetrieveRemoteVersion() {
 			serviceCopy := service
 
 			version.RequestVersion(&serviceCopy)
-
-			logger.LogDebug(fmt.Sprintf("Service: %s", &serviceCopy))
 			config.UpdateService(binary, &serviceCopy)
 		}(binary, service)
 	}

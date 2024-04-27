@@ -13,7 +13,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const Version = "1.0.0"
+const Version = "1.0.1"
 
 func main() {
 	logger.InitLogger()
@@ -65,21 +65,33 @@ func main() {
 	logger.LogInfo("Configuration loaded successfully or defaults in use.")
 	logger.LogInfo(fmt.Sprintf("User: %s, Group: %s\n", config.AppConfig.Settings.User, config.AppConfig.Settings.Group))
 
-	if *infoFlag {
-		serviceNames := config.ListServices() // Get list of all service names
-		for _, serviceName := range serviceNames {
-			service, exists := config.GetService(serviceName) // Use a getter to access service details
-			if !exists {
-				logger.LogWarn(fmt.Sprintf("Service %s not found\n", serviceName))
-				continue
-			}
-
-			installedVersion := version.CheckInstalledVersion(*pathFlag, service.BinName)
-			if installedVersion != "" && installedVersion != service.Version.Current {
-				config.UpdateServiceVersion(serviceName, installedVersion) // Update version through a config package method
-			}
+	serviceNames := config.ListServices() // Get list of all service names
+	for _, serviceName := range serviceNames {
+		service, exists := config.GetService(serviceName) // Use a getter to access service details
+		if !exists {
+			logger.LogWarn(fmt.Sprintf("Service %s not found\n", serviceName))
+			continue
 		}
 
+		installedVersion := version.CheckInstalledVersion(*pathFlag, service.BinName)
+		if installedVersion != "" && installedVersion != service.Version.Current {
+			config.UpdateServiceVersion(serviceName, installedVersion) // Update version through a config package method
+		}
+
+		if *pathFlag != service.Path {
+			config.UpdateServicePath(serviceName, *pathFlag)
+		}
+
+		if *userFlag != config.AppConfig.Settings.User {
+			config.AppConfig.Settings.User = *userFlag
+		}
+
+		if *groupFlag != config.AppConfig.Settings.Group {
+			config.AppConfig.Settings.Group = *groupFlag
+		}
+	}
+
+	if *infoFlag {
 		install.RetrieveRemoteVersion()
 		install.PrintInfo()
 		return
@@ -87,6 +99,8 @@ func main() {
 
 	if *installFlag {
 		install.RetrieveRemoteVersion()
-		install.PerformInstallation(*pathFlag, *devFlag, *userFlag, *groupFlag)
+		install.PrintInfo()
+		install.PerformInstallation(*devFlag)
+		return
 	}
 }

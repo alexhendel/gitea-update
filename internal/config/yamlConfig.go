@@ -9,10 +9,11 @@ type Config struct {
 }
 
 type Service struct {
-	BinName string         `yaml:"bin"`
-	Path    string         `yaml:"path"`
-	URLs    ServiceURLs    `yaml:"urls"`
-	Version ServiceVersion `yaml:"version"`
+	BinName     string         `yaml:"bin"`
+	SystemdName string         `yaml:"systemd"`
+	Path        string         `yaml:"path"`
+	URLs        ServiceURLs    `yaml:"urls"`
+	Version     ServiceVersion `yaml:"version"`
 }
 
 type ServiceURLs struct {
