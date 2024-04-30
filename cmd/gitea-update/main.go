@@ -13,7 +13,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const Version = "1.0.1"
+const Version = "1.0.2"
 
 func main() {
 	logger.InitLogger()
@@ -73,11 +73,6 @@ func main() {
 			continue
 		}
 
-		installedVersion := version.CheckInstalledVersion(*pathFlag, service.BinName)
-		if installedVersion != "" && installedVersion != service.Version.Current {
-			config.UpdateServiceVersion(serviceName, installedVersion) // Update version through a config package method
-		}
-
 		if *pathFlag != service.Path {
 			config.UpdateServicePath(serviceName, *pathFlag)
 		}
@@ -88,6 +83,11 @@ func main() {
 
 		if *groupFlag != config.AppConfig.Settings.Group {
 			config.AppConfig.Settings.Group = *groupFlag
+		}
+
+		installedVersion := version.CheckInstalledVersion(service.Path, service.BinName)
+		if installedVersion != "" && installedVersion != service.Version.Current {
+			config.UpdateServiceVersion(serviceName, installedVersion)
 		}
 	}
 
