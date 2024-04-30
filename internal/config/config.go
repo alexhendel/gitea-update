@@ -57,6 +57,7 @@ func UpdateServicePath(name, path string) {
 func LoadConfig(paths []string) error {
 	for _, path := range paths {
 		if _, err := os.Stat(path); err == nil {
+			logger.LogDebug(fmt.Sprintf("Loading config from %s", path))
 			yamlFile, err := os.ReadFile(path)
 			if err != nil {
 				return fmt.Errorf("failed to read YAML file: %s", err)
